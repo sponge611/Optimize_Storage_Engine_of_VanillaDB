@@ -42,7 +42,7 @@ You need to run experiments to demonstrate how much performance your optimizatio
 This time we request you to record both throughput and average latency of each of your experiment. Also, you should show the results using plots, instead of tables.
 
 `Attention:`
-There are two tables having the exact same name in both Micro and TPC-C benchmarks, so please clean the previous benchmark data before you switch to the other benchmark.
+There are some tables having the exact same name across the Micro and the TPC-C benchmarks, so please clean the previous benchmark data before you switch to the other benchmark.
 
 ### Overall Improvement
 
