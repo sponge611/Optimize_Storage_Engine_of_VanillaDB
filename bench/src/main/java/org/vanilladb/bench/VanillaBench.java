@@ -49,13 +49,13 @@ public class VanillaBench {
 				logger.info("checking the database on the server...");
 
 			SutConnection conn = getConnection();
-			boolean result = benchmarker.executeDatabaseCheckProcedure(conn);
+			/*boolean result = benchmarker.executeDatabaseCheckProcedure(conn);
 
 			if (!result) {
 				if (logger.isLoggable(Level.SEVERE))
 					logger.severe("the database is not ready, please load the database again.");
 				return;
-			}
+			}*/
 
 			if (logger.isLoggable(Level.INFO))
 				logger.info("database check passed.");

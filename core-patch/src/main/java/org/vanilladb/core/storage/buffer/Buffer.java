@@ -57,6 +57,7 @@ public class Buffer {
 	// For ARIES-Recovery algorithm
 	private final Lock flushLock = new ReentrantLock();
 
+	//private final Lock pinLock = new ReentrantLock();
 	/**
 	 * Creates a new buffer, wrapping a new {@link Page page}. This constructor is
 	 * called exclusively by the class {@link BasicBufferMgr}. It depends on the
@@ -174,14 +175,18 @@ public class Buffer {
 	 * Increases the buffer's pin count.
 	 */
 	synchronized void pin() {
+		
 		pins++;
+		
 	}
 
 	/**
 	 * Decreases the buffer's pin count.
 	 */
 	synchronized void unpin() {
+
 		pins--;
+		
 	}
 
 	/**
@@ -191,7 +196,9 @@ public class Buffer {
 	 * @return true if the buffer is pinned
 	 */
 	synchronized boolean isPinned() {
+		
 		return pins > 0;
+		
 	}
 
 	/**

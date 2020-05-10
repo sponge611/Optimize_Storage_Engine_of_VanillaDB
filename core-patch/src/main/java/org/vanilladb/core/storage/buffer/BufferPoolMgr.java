@@ -123,8 +123,10 @@ class BufferPoolMgr {
 	synchronized void unpin(Buffer... buffs) {
 		for (Buffer buff : buffs) {
 			buff.unpin();
-			if (!buff.isPinned())
+			if (!buff.isPinned()) {
 				numAvailable++;
+			}
+			
 		}
 	}
 

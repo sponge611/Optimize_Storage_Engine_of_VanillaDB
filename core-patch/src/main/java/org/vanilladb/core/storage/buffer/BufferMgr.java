@@ -164,7 +164,7 @@ public class BufferMgr implements TransactionLifecycleListener {
 			}
 		}
 	}
-
+	
 	/**
 	 * Pins a buffer to a new block in the specified file, potentially waiting until
 	 * a buffer becomes available. If no buffer becomes available within a fixed
@@ -272,16 +272,15 @@ public class BufferMgr implements TransactionLifecycleListener {
 	}
 
 	private void unpinAll(Transaction tx) {
-		synchronized (bufferPool) {
 			// Copy the set of pinned buffers to avoid ConcurrentModificationException
 			Set<PinningBuffer> pinnedBuffs = new HashSet<PinningBuffer>(pinningBuffers.values());
-			if (pinnedBuffs != null) {
-				for (PinningBuffer pinnedBuff : pinnedBuffs)
-					bufferPool.unpin(pinnedBuff.buffer);
+			if(pinnedBuffs != null) {
+				synchronized (bufferPool) {
+					for (PinningBuffer pinnedBuff : pinnedBuffs)
+						bufferPool.unpin(pinnedBuff.buffer);
+					bufferPool.notifyAll();
+				}
 			}
-
-			bufferPool.notifyAll();
-		}
 	}
 
 	/**
@@ -312,8 +311,10 @@ public class BufferMgr implements TransactionLifecycleListener {
 				bufferPool.wait(MAX_TIME);
 
 				// Re-pin all blocks
-				for (BlockId blk : blksToBeRepinned)
+				for (BlockId blk : blksToBeRepinned) {
 					pin(blk);
+					//optimized_pin(blk);
+				}
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
