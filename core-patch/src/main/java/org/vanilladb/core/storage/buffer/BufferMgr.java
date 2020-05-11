@@ -109,21 +109,21 @@ public class BufferMgr implements TransactionLifecycleListener {
 	 * @return the buffer pinned to that block
 	 */
 	public Buffer pin(BlockId blk) {
+		
+		// Try to find out if this block has been pinned by this transaction
+		PinningBuffer pinnedBuff = pinningBuffers.get(blk);
+		if (pinnedBuff != null) {
+			pinnedBuff.pinCount++;
+			return pinnedBuff.buffer;
+		}
+
+		/*
+		 * Throws BufferAbortException if the calling tx requires more buffers than the
+		 * size of buffer pool.
+		 */
+		if (pinningBuffers.size() == BUFFER_POOL_SIZE)
+			throw new BufferAbortException();
 		synchronized (bufferPool) {
-			// Try to find out if this block has been pinned by this transaction
-			PinningBuffer pinnedBuff = pinningBuffers.get(blk);
-			if (pinnedBuff != null) {
-				pinnedBuff.pinCount++;
-				return pinnedBuff.buffer;
-			}
-
-			/*
-			 * Throws BufferAbortException if the calling tx requires more buffers than the
-			 * size of buffer pool.
-			 */
-			if (pinningBuffers.size() == BUFFER_POOL_SIZE)
-				throw new BufferAbortException();
-
 			// Pinning process
 			try {
 				Buffer buff;
