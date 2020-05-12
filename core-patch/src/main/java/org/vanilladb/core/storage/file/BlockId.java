@@ -23,6 +23,7 @@ package org.vanilladb.core.storage.file;
 public class BlockId implements Comparable<BlockId> {
 	private String fileName;
 	private long blkNum;
+	private int hashCodes;
 
 	/**
 	 * Constructs a block ID for the specified fileName and block number.
@@ -33,6 +34,7 @@ public class BlockId implements Comparable<BlockId> {
 	public BlockId(String fileName, long blkNum) {
 		this.fileName = fileName;
 		this.blkNum = blkNum;
+		this.hashCodes = toString().hashCode();
 	}
 
 	/**
@@ -84,6 +86,6 @@ public class BlockId implements Comparable<BlockId> {
 
 	@Override
 	public int hashCode() {
-		return toString().hashCode();
+		return hashCodes;
 	}
 }
