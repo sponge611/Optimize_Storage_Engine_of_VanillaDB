@@ -230,13 +230,14 @@ public class BufferMgr implements TransactionLifecycleListener {
 
 		if (pinnedBuff != null) {
 			pinnedBuff.pinCount--;
+			
+		if (pinnedBuff.pinCount == 0) {
 			synchronized (bufferPool) {
-				if (pinnedBuff.pinCount == 0) {
-					bufferPool.unpin(buff);
-					pinningBuffers.remove(blk);
-					bufferPool.notifyAll();
-				}
+				bufferPool.unpin(buff);
+				pinningBuffers.remove(blk);
+				bufferPool.notifyAll();
 			}
+		}
 		}
 	}
 
@@ -244,20 +245,19 @@ public class BufferMgr implements TransactionLifecycleListener {
 	 * Flushes all dirty buffers.
 	 */
 	public void flushAll() {
-		synchronized (bufferPool) {
-			bufferPool.flushAll();
-		}
+		
+		bufferPool.flushAll();
+		
 	}
 
 	/**
 	 * Flushes the dirty buffers modified by the host transaction.
 	 */
 	public void flushAllMyBuffers() {
-		synchronized (bufferPool) {
-			for (Buffer buff : buffersToFlush) {
-				buff.flush();
-			}
+		for (Buffer buff : buffersToFlush) {
+			buff.flush();
 		}
+
 	}
 
 	/**

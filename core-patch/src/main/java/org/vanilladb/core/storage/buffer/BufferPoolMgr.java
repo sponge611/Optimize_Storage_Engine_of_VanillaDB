@@ -64,9 +64,14 @@ class BufferPoolMgr {
 	/**
 	 * Flushes all dirty buffers.
 	 */
-	synchronized void flushAll() {
-		for (Buffer buff : bufferPool)
-			buff.flush();
+	void flushAll() {
+		poolLock.lock();
+		try {
+			for (Buffer buff : bufferPool)
+				buff.flush();
+		} finally {
+			poolLock.unlock();
+		}
 	}
 
 	/**
