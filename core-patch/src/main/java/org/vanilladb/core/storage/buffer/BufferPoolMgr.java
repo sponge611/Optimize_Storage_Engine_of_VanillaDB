@@ -17,6 +17,8 @@ package org.vanilladb.core.storage.buffer;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -31,7 +33,8 @@ class BufferPoolMgr {
 	private static Logger logger = Logger.getLogger(BufferPoolMgr.class.getName());
 	private Buffer[] bufferPool;
 	private Map<BlockId, Buffer> blockMap;
-	private int numAvailable;
+	private int numAvailable, lastReplacedBuff;
+	private Lock poolLock = new ReentrantLock();
 
 	/**
 	 * Creates a buffer manager having the specified number of buffer slots. This
@@ -50,6 +53,7 @@ class BufferPoolMgr {
 		bufferPool = new Buffer[numBuffs];
 		blockMap = new ConcurrentHashMap<BlockId, Buffer>(numBuffs);
 		numAvailable = numBuffs;
+		lastReplacedBuff = 0;
 		for (int i = 0; i < numBuffs; i++)
 			bufferPool[i] = new Buffer();
 
@@ -146,16 +150,17 @@ class BufferPoolMgr {
 	}
 
 	private Buffer chooseUnpinnedBuffer() {
-		int bufferPool_length =  bufferPool.length;
-		long oldest_unpin = System.currentTimeMillis();
-		Buffer victim = null;
-		for (int i=0; i<bufferPool_length; i++) {
-			Buffer buff = bufferPool[i];
-			if (!buff.isPinned() && buff.unpin_time()<oldest_unpin) {
-				oldest_unpin = buff.unpin_time();
-				victim = buff;
+		int currBlk = (lastReplacedBuff + 1) % bufferPool.length;
+		while (currBlk != lastReplacedBuff) {
+			Buffer buff = bufferPool[currBlk];
+			if (!buff.isPinned()) {
+				lastReplacedBuff = currBlk;
+				return buff;
 			}
+			currBlk = (currBlk + 1) % bufferPool.length;
 		}
-		return victim;
+		return null;
+
+
 	}
 }

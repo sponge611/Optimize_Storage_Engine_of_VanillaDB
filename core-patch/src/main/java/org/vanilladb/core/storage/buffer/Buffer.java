@@ -17,6 +17,7 @@ package org.vanilladb.core.storage.buffer;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -49,11 +50,11 @@ public class Buffer {
 
 	private Page contents = new Page();
 	private BlockId blk = null;
-	private int pins = 0;
+	private AtomicInteger pins = new AtomicInteger(0);
 	private boolean isNew = false;
 	private Set<Long> modifiedBy = new HashSet<Long>();
 	private LogSeqNum lastLsn = LogSeqNum.DEFAULT_VALUE;
-	private long UnpinTime = System.currentTimeMillis();
+	//private long UnpinTime = System.nanoTime();
 
 	// For ARIES-Recovery algorithm
 	private final Lock flushLock = new ReentrantLock();
@@ -175,24 +176,26 @@ public class Buffer {
 	/**
 	 * Increases the buffer's pin count.
 	 */
-	synchronized void pin() {
+	void pin() {
 		
-		pins++;
+		pins.incrementAndGet();
+		
 		
 	}
 
 	/**
 	 * Decreases the buffer's pin count.
 	 */
-	synchronized void unpin() {
+	void unpin() {
 
-		pins--;
-		UnpinTime = System.currentTimeMillis();
+		pins.decrementAndGet();
+		//UnpinTime = System.nanoTime();
+		
 	}
 	
-	public long unpin_time(){
+	/*synchronized public long unpin_time(){
 		return UnpinTime;
-	}
+	}*/
 
 	/**
 	 * Returns true if the buffer is currently pinned (that is, if it has a nonzero
@@ -200,9 +203,9 @@ public class Buffer {
 	 * 
 	 * @return true if the buffer is pinned
 	 */
-	synchronized boolean isPinned() {
+	boolean isPinned() {
 		
-		return pins > 0;
+		return pins.get() > 0;
 		
 	}
 
@@ -226,7 +229,7 @@ public class Buffer {
 		flush();
 		this.blk = blk;
 		contents.read(blk);
-		pins = 0;
+		pins.set(0);
 		lastLsn = LogSeqNum.readFromPage(contents, LAST_LSN_OFFSET);
 	}
 
@@ -242,7 +245,7 @@ public class Buffer {
 		flush();
 		fmtr.format(this);
 		blk = contents.append(fileName);
-		pins = 0;
+		pins.set(0);
 		isNew = true;
 		lastLsn = LogSeqNum.DEFAULT_VALUE;
 	}
