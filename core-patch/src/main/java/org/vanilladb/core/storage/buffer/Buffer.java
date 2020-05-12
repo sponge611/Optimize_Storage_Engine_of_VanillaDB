@@ -54,7 +54,7 @@ public class Buffer {
 	private boolean isNew = false;
 	private Set<Long> modifiedBy = new HashSet<Long>();
 	private LogSeqNum lastLsn = LogSeqNum.DEFAULT_VALUE;
-	//private long UnpinTime = System.nanoTime();
+	private long UnpinTime;
 
 	// For ARIES-Recovery algorithm
 	private final Lock flushLock = new ReentrantLock();
@@ -189,8 +189,12 @@ public class Buffer {
 	void unpin() {
 
 		pins.decrementAndGet();
-		//UnpinTime = System.nanoTime();
+		UnpinTime = System.nanoTime();
 		
+	}
+	
+	public synchronized long get_UnpinTime(){
+		return UnpinTime;
 	}
 	
 	/*synchronized public long unpin_time(){
