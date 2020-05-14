@@ -91,7 +91,12 @@ class BufferPoolMgr {
 			BlockId oldBlk = buff.block();
 			if (oldBlk != null)
 				blockMap.remove(oldBlk);
-			buff.assignToBlock(blk);
+			poolLock.lock();
+			try{
+				buff.assignToBlock(blk);
+			} finally {
+				poolLock.unlock();
+			}
 			blockMap.put(blk, buff);
 		}
 		if (!buff.isPinned())
@@ -115,8 +120,12 @@ class BufferPoolMgr {
 		BlockId oldBlk = buff.block();
 		if (oldBlk != null)
 			blockMap.remove(oldBlk);
-
-		buff.assignToNew(fileName, fmtr);
+		poolLock.lock();
+		try {
+			buff.assignToNew(fileName, fmtr);
+		} finally {
+			poolLock.unlock();
+		}
 		numAvailable--;
 		buff.pin();
 		blockMap.put(buff.block(), buff);

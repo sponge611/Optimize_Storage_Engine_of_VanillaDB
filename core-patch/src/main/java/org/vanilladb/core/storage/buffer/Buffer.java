@@ -18,6 +18,7 @@ package org.vanilladb.core.storage.buffer;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -54,7 +55,7 @@ public class Buffer {
 	private boolean isNew = false;
 	private Set<Long> modifiedBy = new HashSet<Long>();
 	private LogSeqNum lastLsn = LogSeqNum.DEFAULT_VALUE;
-	private long UnpinTime;
+	private AtomicLong UnpinTime = new AtomicLong();
 
 	// For ARIES-Recovery algorithm
 	private final Lock flushLock = new ReentrantLock();
@@ -189,12 +190,12 @@ public class Buffer {
 	void unpin() {
 
 		pins.decrementAndGet();
-		UnpinTime = System.nanoTime();
+		UnpinTime.set(System.nanoTime());
 		
 	}
 	
-	public synchronized long get_UnpinTime(){
-		return UnpinTime;
+	long get_UnpinTime(){
+		return UnpinTime.get();
 	}
 	
 	/*synchronized public long unpin_time(){
