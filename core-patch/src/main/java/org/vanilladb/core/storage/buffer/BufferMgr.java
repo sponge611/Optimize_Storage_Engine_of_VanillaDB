@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -72,7 +73,7 @@ public class BufferMgr implements TransactionLifecycleListener {
 	}
 
 	protected static BufferPoolMgr bufferPool = new BufferPoolMgr(BUFFER_POOL_SIZE);
-	protected static List<Thread> waitingThreads = new LinkedList<Thread>();
+	protected static ConcurrentLinkedQueue<Thread> waitingThreads = new ConcurrentLinkedQueue<Thread>();
 
 	// Record the buffers that is being pinned by the transaction
 	private Map<BlockId, PinningBuffer> pinningBuffers = new HashMap<BlockId, PinningBuffer>();
@@ -123,46 +124,47 @@ public class BufferMgr implements TransactionLifecycleListener {
 		 */
 		if (pinningBuffers.size() == BUFFER_POOL_SIZE)
 			throw new BufferAbortException();
-		synchronized (bufferPool) {
 			// Pinning process
-			try {
-				Buffer buff;
-				long timestamp = System.currentTimeMillis();
+		try {
+			Buffer buff;
+			long timestamp = System.currentTimeMillis();
 
-				// Try to pin a buffer or the pinned buffer for the given BlockId
-				buff = bufferPool.pin(blk);
-
-				// If there is no such buffer or no available buffer,
-				// wait for it
-				if (buff == null) {
-					waitingThreads.add(Thread.currentThread());
-
+			// Try to pin a buffer or the pinned buffer for the given BlockId
+			buff = bufferPool.pin(blk);
+				
+			if (buff!=null) {
+				pinningBuffers.put(buff.block(), new PinningBuffer(buff));	
+				return buff;
+			}
+			// If there is no such buffer or no available buffer,
+			// wait for it
+			else{
+				waitingThreads.add(Thread.currentThread());
+				synchronized (bufferPool) {
 					while (buff == null && !waitingTooLong(timestamp)) {
 						bufferPool.wait(MAX_TIME);
-						if (waitingThreads.get(0).equals(Thread.currentThread()))
+						if (waitingThreads.peek().equals(Thread.currentThread()))
 							buff = bufferPool.pin(blk);
 					}
-
 					waitingThreads.remove(Thread.currentThread());
-
 					// Wake up other waiting threads (after leaving this critical section)
 					bufferPool.notifyAll();
+					// If it still has no buffer after a long wait,
+					// release and re-pin all buffers it has
+					if (buff == null) {
+						repin();
+						buff = pin(blk);
+						return buff;
+					} 
 				}
-
-				// If it still has no buffer after a long wait,
-				// release and re-pin all buffers it has
-				if (buff == null) {
-					repin();
-					buff = pin(blk);
-				} else {
-					pinningBuffers.put(buff.block(), new PinningBuffer(buff));
-				}
-
+				pinningBuffers.put(buff.block(), new PinningBuffer(buff));
 				return buff;
-			} catch (InterruptedException e) {
-				throw new BufferAbortException();
 			}
+
+		} catch (InterruptedException e) {
+			throw new BufferAbortException();
 		}
+		
 	}
 	
 	/**
@@ -175,7 +177,6 @@ public class BufferMgr implements TransactionLifecycleListener {
 	 * @return the buffer pinned to that block
 	 */
 	public Buffer pinNew(String fileName, PageFormatter fmtr) {
-		synchronized (bufferPool) {
 			if (pinningBuffers.size() == BUFFER_POOL_SIZE)
 				throw new BufferAbortException();
 			try {
@@ -184,37 +185,40 @@ public class BufferMgr implements TransactionLifecycleListener {
 
 				// Try to pin a buffer or the pinned buffer for the given BlockId
 				buff = bufferPool.pinNew(fileName, fmtr);
-
+				if(buff!=null) {
+					pinningBuffers.put(buff.block(), new PinningBuffer(buff));
+					return buff;
+					
+				}
 				// If there is no such buffer or no available buffer,
 				// wait for it
-				if (buff == null) {
+				else{
+
 					waitingThreads.add(Thread.currentThread());
-
-					while (buff == null && !waitingTooLong(timestamp)) {
-						bufferPool.wait(MAX_TIME);
-						if (waitingThreads.get(0).equals(Thread.currentThread()))
-							buff = bufferPool.pinNew(fileName, fmtr);
+					synchronized (bufferPool) {
+						while (buff == null && !waitingTooLong(timestamp)) {
+							bufferPool.wait(MAX_TIME);
+							if (waitingThreads.peek().equals(Thread.currentThread()))
+								buff = bufferPool.pinNew(fileName, fmtr);
+						}
+						waitingThreads.remove(Thread.currentThread());
+						bufferPool.notifyAll();
+						// If it still has no buffer after a long wait,
+						// release and re-pin all buffers it has
+						if (buff == null) {
+							repin();
+							buff = pinNew(fileName, fmtr);
+							return buff;
+						}
 					}
-
-					waitingThreads.remove(Thread.currentThread());
-
-					bufferPool.notifyAll();
-				}
-
-				// If it still has no buffer after a long wait,
-				// release and re-pin all buffers it has
-				if (buff == null) {
-					repin();
-					buff = pinNew(fileName, fmtr);
-				} else {
 					pinningBuffers.put(buff.block(), new PinningBuffer(buff));
+					return buff;
 				}
+				
 
-				return buff;
 			} catch (InterruptedException e) {
 				throw new BufferAbortException();
-			}
-		}
+			}		
 	}
 
 	/**
@@ -274,16 +278,11 @@ public class BufferMgr implements TransactionLifecycleListener {
 	private void unpinAll(Transaction tx) {
 			// Copy the set of pinned buffers to avoid ConcurrentModificationException
 			Set<PinningBuffer> pinnedBuffs = new HashSet<PinningBuffer>(pinningBuffers.values());
-			Buffer[] unpinning_buffer;
-			unpinning_buffer = new Buffer[pinnedBuffs.size()];
-			int idx = 0;
-			for (PinningBuffer pinnedBuff : pinnedBuffs) {
-				unpinning_buffer[idx] = pinnedBuff.buffer;
-				idx++;
-			}
 			if(pinnedBuffs != null) {
 				synchronized (bufferPool) {
-					bufferPool.unpin(unpinning_buffer);
+					for (PinningBuffer pinnedBuff : pinnedBuffs) {
+						bufferPool.unpin(pinnedBuff.buffer);
+					}
 					bufferPool.notifyAll();
 				}
 			}
