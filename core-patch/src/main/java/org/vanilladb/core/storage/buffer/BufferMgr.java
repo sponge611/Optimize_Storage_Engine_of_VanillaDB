@@ -236,9 +236,9 @@ public class BufferMgr implements TransactionLifecycleListener {
 			pinnedBuff.pinCount--;
 			
 		if (pinnedBuff.pinCount == 0) {
-			synchronized (bufferPool) {
 				bufferPool.unpin(buff);
 				pinningBuffers.remove(blk);
+			synchronized (bufferPool) {
 				bufferPool.notifyAll();
 			}
 		}
@@ -270,20 +270,18 @@ public class BufferMgr implements TransactionLifecycleListener {
 	 * @return the number of available buffers`
 	 */
 	public int available() {
-		synchronized (bufferPool) {
-			return bufferPool.available();
-		}
+		return bufferPool.available();
 	}
 
 	private void unpinAll(Transaction tx) {
 			// Copy the set of pinned buffers to avoid ConcurrentModificationException
 			Set<PinningBuffer> pinnedBuffs = new HashSet<PinningBuffer>(pinningBuffers.values());
 			if(pinnedBuffs != null) {
-				synchronized (bufferPool) {
 					for (PinningBuffer pinnedBuff : pinnedBuffs) {
 						bufferPool.unpin(pinnedBuff.buffer);
+					synchronized (bufferPool) {
+						bufferPool.notifyAll();
 					}
-					bufferPool.notifyAll();
 				}
 			}
 	}
