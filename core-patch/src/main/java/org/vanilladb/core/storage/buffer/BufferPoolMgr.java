@@ -165,19 +165,15 @@ class BufferPoolMgr {
 
 	private Buffer chooseUnpinnedBuffer() {
 		int currBlk = (lastReplacedBuff + 1) % bufferPool.length;
-		long oldest = System.nanoTime();
-		Buffer victim_buff = null;
 		while (currBlk != lastReplacedBuff) {
 			Buffer buff = bufferPool[currBlk];
-			if (!buff.isPinned() && buff.get_UnpinTime()<oldest) {
-				lastReplacedBuff = currBlk; 
-				oldest = buff.get_UnpinTime();
-				victim_buff = buff;
-			
+			if (!buff.isPinned()) {
+				lastReplacedBuff = currBlk;
+				return buff;
 			}
 			currBlk = (currBlk + 1) % bufferPool.length;
 		}
-		return victim_buff;
+		return null;
 		
 	}
 }
