@@ -17,6 +17,9 @@ package org.vanilladb.core.storage.buffer;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.LinkedHashMap;
+import java.util.Collections;
+import java.util.Set;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
@@ -33,6 +36,7 @@ class BufferPoolMgr {
 	private static Logger logger = Logger.getLogger(BufferPoolMgr.class.getName());
 	private Buffer[] bufferPool;
 	private Map<BlockId, Buffer> blockMap;
+	private Map<BlockId, Buffer> SyncLinkedMap;
 	private int numAvailable, lastReplacedBuff;
 	private Lock poolLock = new ReentrantLock();
 
@@ -52,11 +56,13 @@ class BufferPoolMgr {
 
 		bufferPool = new Buffer[numBuffs];
 		blockMap = new ConcurrentHashMap<BlockId, Buffer>(numBuffs);
+		SyncLinkedMap = Collections.synchronizedMap(new LinkedHashMap<BlockId, Buffer>(numBuffs));
 		numAvailable = numBuffs;
 		lastReplacedBuff = 0;
+		/*
 		for (int i = 0; i < numBuffs; i++)
 			bufferPool[i] = new Buffer();
-
+		*/
 		if (logger.isLoggable(Level.INFO))
 			logger.info("Buffer pool is ready (assignment 4 version)");
 	}
@@ -67,11 +73,22 @@ class BufferPoolMgr {
 	void flushAll() {
 		poolLock.lock();
 		try {
+			for (Map.Entry<BlockId, Buffer> entry : SyncLinkedMap.entrySet()) {
+			    Buffer buff = entry.getValue();
+			    buff.flush();
+			}
+				
+		} finally {
+			poolLock.unlock();
+		}
+		/*
+		try {
 			for (Buffer buff : bufferPool)
 				buff.flush();
 		} finally {
 			poolLock.unlock();
 		}
+		*/
 	}
 
 	/**
@@ -89,15 +106,18 @@ class BufferPoolMgr {
 			if (buff == null)
 				return null;
 			BlockId oldBlk = buff.block();
-			if (oldBlk != null)
-				blockMap.remove(oldBlk);
+			if (oldBlk != null){
+				SyncLinkedMap.remove(oldBlk);
+				//blockMap.remove(oldBlk);
+			}
 			poolLock.lock();
 			try{
 				buff.assignToBlock(blk);
 			} finally {
 				poolLock.unlock();
 			}
-			blockMap.put(blk, buff);
+			SyncLinkedMap.put(blk, buff);
+			//blockMap.put(blk, buff);
 		}
 		if (!buff.isPinned())
 			numAvailable--;
@@ -118,8 +138,10 @@ class BufferPoolMgr {
 		if (buff == null)
 			return null;
 		BlockId oldBlk = buff.block();
-		if (oldBlk != null)
-			blockMap.remove(oldBlk);
+		if (oldBlk != null){
+			SyncLinkedMap.remove(oldBlk);
+			//blockMap.remove(oldBlk);
+		}
 		poolLock.lock();
 		try {
 			buff.assignToNew(fileName, fmtr);
@@ -128,7 +150,8 @@ class BufferPoolMgr {
 		}
 		numAvailable--;
 		buff.pin();
-		blockMap.put(buff.block(), buff);
+		SyncLinkedMap.put(buff.block(), buff);
+		//blockMap.put(buff.block(), buff);
 		return buff;
 	}
 
@@ -142,6 +165,7 @@ class BufferPoolMgr {
 			buff.unpin();
 			if (!buff.isPinned()) {
 				numAvailable++;
+				SyncLinkedMap.get(buff.block());
 			}
 			
 		}
@@ -157,12 +181,27 @@ class BufferPoolMgr {
 	}
 
 	private Buffer findExistingBuffer(BlockId blk) {
-		Buffer buff = blockMap.get(blk);
+		Buffer buff = SyncLinkedMap.get(blk);
+		//Buffer buff = blockMap.get(blk);
 		if (buff != null && buff.block().equals(blk))
 			return buff;
 		return null;
 	}
-
+	
+	private Buffer chooseUnpinnedBuffer() {
+		if(SyncLinkedMap.size() < bufferPool.length)
+			return new Buffer();
+		
+		Set<BlockId> keys = SyncLinkedMap.keySet();
+	    for(BlockId k:keys){
+	    	Buffer buff = SyncLinkedMap.get(k);
+	        if (!buff.isPinned()) 
+	        	return buff;
+	    }
+		return null;
+		
+	}
+	/*
 	private Buffer chooseUnpinnedBuffer() {
 		int currBlk = (lastReplacedBuff + 1) % bufferPool.length;
 		while (currBlk != lastReplacedBuff) {
@@ -176,4 +215,5 @@ class BufferPoolMgr {
 		return null;
 		
 	}
+	*/
 }
