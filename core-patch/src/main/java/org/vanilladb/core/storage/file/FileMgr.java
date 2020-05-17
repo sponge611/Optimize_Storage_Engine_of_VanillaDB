@@ -22,8 +22,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -56,10 +54,6 @@ public class FileMgr {
 	private File dbDirectory, logDirectory;
 	private boolean isNew;
 	private Map<String, IoChannel> openFiles = new ConcurrentHashMap<String, IoChannel>();
-	private Lock readLock = new ReentrantLock();
-	private Lock writeLock = new ReentrantLock();
-	private Lock appendLock = new ReentrantLock();
-	private Lock channelLock = new ReentrantLock();
 
 	static {
 		String dbDir = CoreProperties.getLoader().getPropertyAsString(FileMgr.class.getName() + ".DB_FILES_DIR",
@@ -125,8 +119,7 @@ public class FileMgr {
 	 * @param blk    a block ID
 	 * @param buffer the byte buffer
 	 */
-	void read(BlockId blk, IoBuffer buffer) {
-		readLock.lock();
+	synchronized void read(BlockId blk, IoBuffer buffer) {
 		try {
 			IoChannel fileChannel = getFileChannel(blk.fileName());
 
@@ -138,8 +131,6 @@ public class FileMgr {
 		} catch (IOException e) {
 			e.printStackTrace();
 			throw new RuntimeException("cannot read block " + blk);
-		} finally {
-			readLock.unlock();
 		}
 	}
 
@@ -149,8 +140,7 @@ public class FileMgr {
 	 * @param blk    a block ID
 	 * @param buffer the byte buffer
 	 */
-	void write(BlockId blk, IoBuffer buffer) {
-		writeLock.lock();
+	synchronized void write(BlockId blk, IoBuffer buffer) {
 		try {
 			IoChannel fileChannel = getFileChannel(blk.fileName());
 
@@ -162,8 +152,6 @@ public class FileMgr {
 		} catch (IOException e) {
 			e.printStackTrace();
 			throw new RuntimeException("cannot write block" + blk);
-		}finally {
-			writeLock.unlock();
 		}
 	}
 
@@ -174,8 +162,7 @@ public class FileMgr {
 	 * @param buffer   the byte buffer
 	 * @return a block ID refers to the newly-created block.
 	 */
-	BlockId append(String fileName, IoBuffer buffer) {
-		appendLock.lock();
+	synchronized BlockId append(String fileName, IoBuffer buffer) {
 		try {
 			IoChannel fileChannel = getFileChannel(fileName);
 
@@ -191,8 +178,6 @@ public class FileMgr {
 		} catch (IOException e) {
 			e.printStackTrace();
 			return null;
-		}finally {
-			appendLock.unlock();
 		}
 	}
 
@@ -203,15 +188,12 @@ public class FileMgr {
 	 * 
 	 * @return the number of blocks in the file
 	 */
-	public long size(String fileName) {
-		appendLock.lock();
+	public synchronized long size(String fileName) {
 		try {
 			IoChannel fileChannel = getFileChannel(fileName);
 			return fileChannel.size() / BLOCK_SIZE;
 		} catch (IOException e) {
 			throw new RuntimeException("cannot access " + fileName);
-		}finally {
-			appendLock.unlock();
 		}
 	}
 
@@ -236,21 +218,17 @@ public class FileMgr {
 	 * @throws IOException
 	 */
 	private IoChannel getFileChannel(String fileName) throws IOException {
-		channelLock.lock();
-		try{
-			IoChannel fileChannel = openFiles.get(fileName);
-			if (fileChannel == null) {
-				File dbFile = fileName.equals(DEFAULT_LOG_FILE) ? new File(logDirectory, fileName)
-						: new File(dbDirectory, fileName);
-				fileChannel = IoAllocator.newIoChannel(dbFile);
+		IoChannel fileChannel = openFiles.get(fileName);
 
-				openFiles.put(fileName, fileChannel);
-			}
+		if (fileChannel == null) {
+			File dbFile = fileName.equals(DEFAULT_LOG_FILE) ? new File(logDirectory, fileName)
+					: new File(dbDirectory, fileName);
+			fileChannel = IoAllocator.newIoChannel(dbFile);
+
+			openFiles.put(fileName, fileChannel);
+		}
 
 		return fileChannel;
-		} finally {
-			channelLock.unlock();
-		}
 	}
 
 	/**
@@ -258,10 +236,7 @@ public class FileMgr {
 	 * 
 	 * @param fileName the name of the target file
 	 */
-	public void delete(String fileName) {
-		readLock.lock();
-		writeLock.lock();
-		appendLock.lock();
+	public synchronized void delete(String fileName) {
 		try {
 			// Close file, if it was opened
 			IoChannel fileChannel = openFiles.remove(fileName);
@@ -276,10 +251,6 @@ public class FileMgr {
 			if (logger.isLoggable(Level.WARNING))
 				logger.warning("there is something wrong when deleting " + fileName);
 			e.printStackTrace();
-		} finally {
-			readLock.unlock();
-			writeLock.unlock();
-			appendLock.unlock();
 		}
 	}
 }
